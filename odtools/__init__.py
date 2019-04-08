@@ -3,13 +3,14 @@ from copy import deepcopy
 
 """tools to make open-data formatting easier. it works with the `stappy` library."""
 
-VERSION_STR = '0.1.0'
+VERSION_STR = '0.2.0'
 
 METADATA_ENTRY = 'metadata'
 SUBJECT_KEY    = 'subject'
 DATE_KEY       = 'date'
 SESSION_KEY    = 'session_number'
 DOMAIN_KEY     = 'domain'
+RUN_KEY        = 'run'
 
 DEFINITION_KEY = 'definition'
 VALUE_KEY      = 'value'
@@ -39,7 +40,16 @@ def is_session(entry):
     return within_session(entry) and not is_group(entry)
 
 def is_group(entry):
+    return within_domain(entry) or is_run(entry)
+
+def within_domain(entry):
     return DOMAIN_KEY in entry.attrs[METADATA_ENTRY].keys()
+
+def is_domain(entry):
+    return within_domain(entry) and not is_run(entry)
+
+def is_run(entry):
+    return RUN_KEY in entry.attrs[METADATA_ENTRY].keys()
 
 ### reading
 
@@ -94,9 +104,11 @@ class Attribute:
     def add_value(self, name, value, definition='', unit=''):
         """adds a value (primitive, dict or list) to this attribute, and returns it."""
         self._content[name] = OrderedDict()
-        self._content[name][DEFINITION_KEY] = definition
+        if definition is not None:
+            self._content[name][DEFINITION_KEY] = definition
         self._content[name][VALUE_KEY]      = value
-        self._content[name][UNIT_KEY]       = unit
+        if unit is not None:
+            self._content[name][UNIT_KEY]       = unit
         return self._content[name]
 
     def as_dict(self):
@@ -166,17 +178,33 @@ def add_session(date_entry, number):
     session_entry.attrs[f'{METADATA_ENTRY}/{SESSION_KEY}'] = number
     return session_entry
 
-def add_group(parent, name, definition=''):
-    """returns the created group."""
+def add_group(parent, name, key=None, definition=''):
+    """returns the created group.
+    can be created under session entry."""
     if name is None:
         raise ValueError("name cannot be None")
+    if key is None:
+        raise ValueError("key cannot be None for a group")
     if not within_session(parent):
-        raise ValueError("must be called with a session or group entry")
+        raise ValueError("must be called with a session or domain entry")
     group = parent.create[name]
     group.attrs[METADATA_ENTRY] = deepcopy(parent.attrs[METADATA_ENTRY])
-    group.attrs[f'{METADATA_ENTRY}/{DOMAIN_KEY}'] = definition
-    parent.attrs[f'{name}/{DEFINITION_KEY}'] = definition
+
+    group.attrs[f'{METADATA_ENTRY}/{key}'] = definition
+    parent.attrs[f'{name}/{DEFINITION_KEY}']      = definition
     return group
+
+def add_domain(parent, name, definition=''):
+    """returns the created domain.
+    can be created under session entry."""
+    return add_group(parent, name, key=DOMAIN_KEY, definition=definition)
+
+def add_run(parent, name, definition=''):
+    """returns the created run.
+    can be created under session entry."""
+    if not (is_session(parent) or is_domain(parent)):
+        raise ValueError("a run must be under a session or a domain.")
+    return add_group(parent, name, key=RUN_KEY, definition=definition)
 
 def add_filepath(parent, filename, definition=''):
     """returns the path to filename."""
@@ -190,7 +218,7 @@ def add_filepath(parent, filename, definition=''):
 
 def add_dataset(parent, name, value, definition='', unit=''):
     """returns None.
-    `parent` may be either session or group entry."""
+    `parent` may be either session or domain entry."""
     if name is None:
         raise ValueError("name cannot be None")
     parent[name] = value
