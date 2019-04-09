@@ -107,6 +107,15 @@ def iter_sessions(entry):
             for session_number in date.child_names():
                 yield (path + (session_number,)), date[session_number]
 
+def get_filepath(parent, filename):
+    if filename is None:
+        raise ValueError("filename cannot be None")
+    parent_path = parent._repr
+    file_path   = parent_path / filename
+    if not file_path.exists():
+        raise FileNotFoundError(file_path)
+    return file_path
+
 ### manipulation
 
 class Attribute:
@@ -209,7 +218,8 @@ def add_group(parent, name, key=None, definition=''):
     # if not within_session(parent):
     #     raise ValueError("must be called with a session or domain entry")
     group = parent.create[name]
-    group.attrs[METADATA_ENTRY] = deepcopy(parent.attrs[METADATA_ENTRY])
+    if METADATA_ENTRY in parent.attrs.keys():
+        group.attrs[METADATA_ENTRY] = deepcopy(parent.attrs[METADATA_ENTRY])
 
     group.attrs[f'{METADATA_ENTRY}/{key}'] = definition
     parent.attrs[f'{name}/{DEFINITION_KEY}']      = definition
@@ -221,8 +231,8 @@ def add_domain(parent, name, definition=''):
 
 def add_run(parent, name, definition=''):
     """returns the created run."""
-    if not (is_session(parent) or is_domain(parent)):
-        raise ValueError("a run must be under a session or a domain.")
+    # if not (is_session(parent) or is_domain(parent)):
+    #     raise ValueError("a run must be under a session or a domain.")
     return add_group(parent, name, key=RUN_KEY, definition=definition)
 
 def add_filepath(parent, filename, definition=''):
@@ -290,7 +300,7 @@ class DataFormat:
 
     _storage_funcs = {
         'dataset':   add_dataset,
-        'attribute': set_attribute
+        'attribute': add_attribute
     }
 
     def store_under(self, group, name, entry_names=None, entry_defs=None, entry_units=None):
@@ -320,10 +330,11 @@ class DataFormat:
 
             valuetype   = self.types[attr]
             if valuetype in self._storage_funcs.keys():
-                storage_funcs[valuetype](entry, name, value,
+                self._storage_funcs[valuetype](entry, name, value,
                                     definition=definition, unit=unit)
             else:
                 raise ValueError(f"value type not understood: {valuetype}")
+        return entry
 
 class KeyValueFormat:
     """for data classes that can be stored as key-value mappings.
@@ -336,7 +347,12 @@ class KeyValueFormat:
         def_used  = definition if definition is not None else self.definition
 
         if add_metadata == True:
-            meta = { METADATA_ENTRY: group.get(METADATA_ENTRY, '(metadata not found)') }
+            if METADATA_ENTRY in group.attrs.keys():
+                meta = { METADATA_ENTRY: group.attrs[METADATA_ENTRY] }
+            elif hasattr(self, 'metadata'):
+                meta = { METADATA_ENTRY: self.metadata }
+            else:
+                meta = { METADATA_ENTRY: '(metadata not found)' }
             content = self.as_dict(base=meta)
         else:
             content = self.as_dict()
@@ -345,3 +361,4 @@ class KeyValueFormat:
         path      = add_filepath(group, filename, definition=def_used)
         with open(path, 'w') as out:
             json.dump(content, out, indent=4)
+        return path
