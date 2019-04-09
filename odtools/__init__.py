@@ -165,6 +165,7 @@ def add_attribute(parent, path, value, definition='', unit=None):
     parent.attrs[f'{path}/{VALUE_KEY}']      = value
     if unit is not None:
         parent.attrs[f'{path}/{UNIT_KEY}']   = unit
+    parent.attrs.commit()
 
 def set_description(root_entry, desc=''):
     """returns the root entry."""
@@ -181,6 +182,7 @@ def add_subject(root_entry, name):
     subject_entry = root_entry.create[name]
     copy_attributes(root_entry, subject_entry)
     subject_entry.attrs[f'{METADATA_ENTRY}/{SUBJECT_KEY}'] = name
+    subject_entry.attrs.commit()
     return subject_entry
 
 def add_date(subject_entry, date):
@@ -192,6 +194,7 @@ def add_date(subject_entry, date):
     date_entry = subject_entry.create[date]
     copy_attributes(subject_entry, date_entry)
     date_entry.attrs[f'{METADATA_ENTRY}/{DATE_KEY}'] = date
+    date_entry.attrs.commit()
     return date_entry
 
 def add_session(date_entry, number):
@@ -207,6 +210,7 @@ def add_session(date_entry, number):
     session_entry = date_entry.create[str(number)]
     copy_attributes(date_entry, session_entry)
     session_entry.attrs[f'{METADATA_ENTRY}/{SESSION_KEY}'] = number
+    session_entry.attrs.commit()
     return session_entry
 
 def add_group(parent, name, key=None, definition=''):
@@ -223,6 +227,8 @@ def add_group(parent, name, key=None, definition=''):
 
     group.attrs[f'{METADATA_ENTRY}/{key}'] = definition
     parent.attrs[f'{name}/{DEFINITION_KEY}']      = definition
+    group.attrs.commit()
+    parent.attrs.commit()
     return group
 
 def add_domain(parent, name, definition=''):
@@ -244,6 +250,7 @@ def add_filepath(parent, filename, definition=''):
     file_path   = parent_path / filename
     parent.attrs[f'{file_path.name}/{DEFINITION_KEY}'] = definition
     parent.attrs[f'{file_path.name}/{TYPE_KEY}']       = FILE_TYPE
+    parent.attrs.commit()
     return file_path
 
 def add_dataset(parent, name, value, definition='', unit=''):
@@ -273,7 +280,7 @@ def copy_file(source, dest, name, destname=None):
         destname = name
     # FIXME: implementation specific
     sourcepath = source._repr / name
-    destpath   = dest.add_filepath(destname, definition=source.attrs[f"{name}/{DEFINITION_KEY}"])
+    destpath   = add_filepath(dest, destname, definition=source.attrs[f"{name}/{DEFINITION_KEY}"])
     shutil.copy(sourcepath, destpath)
     for attrname in source.attrs[name].keys():
         if not is_formatting_attribute(attrname):
