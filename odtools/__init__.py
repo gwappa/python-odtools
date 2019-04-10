@@ -118,6 +118,12 @@ def get_filepath(parent, filename):
         raise FileNotFoundError(file_path)
     return file_path
 
+def has_attribute(entry, name):
+    if isinstance(entry, (dict, OrderedDict)):
+        return name in entry.keys()
+    else:
+        return name in entry.attrs.keys()
+
 ### manipulation
 
 class Attribute:
@@ -167,7 +173,10 @@ class Attribute:
                 raise ValueError('attribute path must be set.')
             else:
                 path = self._name
-        parent.attrs[path] = self.as_dict()
+        if isinstance(parent, (dict, OrderedDict)):
+            _set_at_path(parent, path, self.as_dict())
+        else:
+            parent.attrs[path] = self.as_dict()
 
 def copy_attributes(src, dst):
     for key, val in src.attrs.items():
