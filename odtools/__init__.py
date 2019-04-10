@@ -22,6 +22,8 @@ UNIT_KEY       = 'unit'
 DATASET_TYPE   = 'dataset'
 FILE_TYPE      = 'file'
 
+SEP = '/'
+
 ### Ontological structure
 
 def is_root(entry):
@@ -120,12 +122,14 @@ def get_filepath(parent, filename):
 
 class Attribute:
     """a tool for making attribute definitions easier"""
-    def __init__(self, basedict=None, definition=''):
+    def __init__(self, basedict=None, definition='', parent=None, name=None):
         if basedict is not None:
             self._content = OrderedDict(basedict)
         else:
             self._content = OrderedDict()
         self._content[DEFINITION_KEY] = definition
+        self._parent = parent
+        self._name   = name
 
     def add_group(self, name, definition=''):
         """adds and returns a new child attribute group"""
@@ -151,8 +155,18 @@ class Attribute:
             ret[key] = struct
         return ret
 
-    def add_to_parent(self, parent, path):
+    def add_to_parent(self, parent=None, path=None):
         """adds itself to the parent's attribute at `path`"""
+        if parent is None:
+            if self._parent is None:
+                raise ValueError('parent entry must be set.')
+            else:
+                parent = self._parent
+        if path is None:
+            if self._name is None:
+                raise ValueError('attribute path must be set.')
+            else:
+                path = self._name
         parent.attrs[path] = self.as_dict()
 
 def copy_attributes(src, dst):
@@ -160,12 +174,33 @@ def copy_attributes(src, dst):
         dst.attrs[key] = deepcopy(val)
     dst.attrs.commit()
 
+def _set_at_path(mapping, path, value, dict_cls=OrderedDict):
+    if isinstance(path, (tuple, list)):
+        pathcomps = path
+    else:
+        pathcomps = path.split(SEP)
+
+    if len(pathcomps) == 1:
+        mapping[pathcomps[0]] = value
+    else:
+        name, path = pathcomps[0], pathcomps[1:]
+        if name not in mapping.keys():
+            mapping[name] = dict_cls()
+        _set_at_path(mapping[name], path, value)
+
 def add_attribute(parent, path, value, definition='', unit=None):
-    parent.attrs[f'{path}/{DEFINITION_KEY}'] = definition
-    parent.attrs[f'{path}/{VALUE_KEY}']      = value
-    if unit is not None:
-        parent.attrs[f'{path}/{UNIT_KEY}']   = unit
-    parent.attrs.commit()
+    if isinstance(parent, (dict, OrderedDict)):
+        entry = OrderedDict()
+        entry[DEFINITION_KEY] = definition
+        entry[VALUE_KEY]      = value
+        entry[UNIT_KEY]       = unit
+        _set_at_path(parent, path, entry)
+    else:
+        parent.attrs[f'{path}/{DEFINITION_KEY}'] = definition
+        parent.attrs[f'{path}/{VALUE_KEY}']      = value
+        if unit is not None:
+            parent.attrs[f'{path}/{UNIT_KEY}']   = unit
+        parent.attrs.commit()
 
 def set_description(root_entry, desc=''):
     """returns the root entry."""
